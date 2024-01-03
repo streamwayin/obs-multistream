@@ -8,7 +8,7 @@
 #include "plugin-support.h"
 
 #include "output-config.h"
-
+#include "Dashboard.h"
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -36,22 +36,47 @@ GlobalService& GetGlobalService() {
 }
 
 
-class MultiOutputWidget : public QWidget
+class MultiOutputWidget : public QMainWindow  
 {
     int dockLocation_;
     bool dockVisible_;
     bool reopenShown_;
+    std::string currentBroadcast;
+    QJsonDocument jsonDoc;
+	QJsonObject jsonObj;
+	CURL *curl;
+  	CURLcode res;
+	QString uid , key;
+	QWidget* authWidget;
+     QStackedWidget stackedWidget_;
 
 public:
     MultiOutputWidget(QWidget* parent = 0)
-        : QWidget(parent)
+        : QMainWindow(parent)
         , reopenShown_(false)
     {
         setWindowTitle(obs_module_text("Title"));
-
+        connect(&authManager, &AuthManager::authenticationSuccess, this, &MultiOutputWidget::switchToDashboard);
         container_ = new QWidget(&scroll_);
         layout_ = new QVBoxLayout(container_);
-        layout_->setAlignment(Qt::AlignmentFlag::AlignTop);
+        layout_->setAlignment(Qt::AlignmentFlag::AlignTop); 
+        QStackedWidget& stackedWidget = StackedWidgetManager::getInstance().getStackedWidget();
+        AuthManager authManager;    
+            
+        Dashboard dashboardManager;
+         if (authManager.isAuthenticated()) {
+            dashboardManager.uid = authManager.uid;
+            dashboardManager.key = authManager.key;
+            QWidget* dashboardWidget = dashboardManager.handleTab();
+            stackedWidget_.addWidget(dashboardWidget);
+        } else {
+            // Show authentication screen if not authenticated
+            
+            QWidget* authTabWidget = authManager.handleAuthTab();
+            stackedWidget_.addWidget(authTabWidget);
+        }
+        setCentralWidget(&stackedWidget_);
+
 
         // init widget
         auto addButton = new QPushButton(obs_module_text("Btn.NewTarget"), container_);
@@ -193,6 +218,7 @@ public:
         fullLayout->addWidget(&scroll_, 0, 0);
     }
 
+
     void visibleToggled(bool visible)
     {
         dockVisible_ = visible;
@@ -253,7 +279,24 @@ private:
     QScrollArea scroll_;
     QVBoxLayout* itemLayout_ = 0;
     QVBoxLayout* layout_ = 0;
+
+private:
+    AuthManager authManager;
+
+public slots:
+    void switchToDashboard();
 };
+
+
+
+void MultiOutputWidget::switchToDashboard() {
+    Dashboard dashboardManager;
+    dashboardManager.uid = authManager.uid;
+    dashboardManager.key = authManager.key;
+    QWidget* dashboardWidget = dashboardManager.handleTab();
+    stackedWidget_.addWidget(dashboardWidget);
+    stackedWidget_.setCurrentWidget(dashboardWidget);
+}
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-multi-rtmp", "en-US")
@@ -262,12 +305,15 @@ OBS_MODULE_AUTHOR("雷鳴 (@sorayukinoyume)")
 bool obs_module_load()
 {
     auto mainwin = (QMainWindow*)obs_frontend_get_main_window();
+   
+    
+
     if (mainwin == nullptr)
         return false;
     QMetaObject::invokeMethod(mainwin, []() {
         s_service.uiThread_ = QThread::currentThread();
     });
-
+    
     auto dock = new MultiOutputWidget();
     dock->setObjectName("obs-multi-rtmp-dock");
     if (!obs_frontend_add_dock_by_id("obs-multi-rtmp-dock", obs_module_text("Title"), dock))

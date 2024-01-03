@@ -22,8 +22,8 @@ if(ENABLE_FRONTEND_API)
 endif()
 
 if(ENABLE_QT)
-  find_qt(COMPONENTS Widgets Core)
-  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
+  find_qt(COMPONENTS Widgets Core Network Gui)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Network Qt::Gui)
   target_compile_options(
     ${CMAKE_PROJECT_NAME} PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header
                                   -Wno-comma>)
@@ -33,6 +33,12 @@ if(ENABLE_QT)
                AUTOUIC ON
                AUTORCC ON)
 endif()
+
+find_package(CURL REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE CURL::libcurl)
+
+find_package(nlohmann_json 3.6.1 REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
   ./src/pch.h
@@ -48,6 +54,12 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
   ./src/output-config-legacy.cpp
   ./src/obs-properties-widget.h
   ./src/obs-properties-widget.cpp
+  ./src/AuthManager.cpp
+  ./src/AuthManager.h
+  ./src/AuthManager.h
+  ./src/StackedWidgetManager.h
+  ./src/Dashboard.cpp
+  ./src/Dashboard.h
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE

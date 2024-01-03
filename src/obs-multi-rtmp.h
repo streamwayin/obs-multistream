@@ -1,6 +1,11 @@
 ﻿#pragma once
 
 #include <functional>
+#include <QString>
+
+extern QString uid; // Declare uid as external variable
+extern QString key; // Declare key as external variable
+bool isAuthenticated(); // Declare the function
 
 class GlobalService
 {
