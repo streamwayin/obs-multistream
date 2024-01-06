@@ -9,6 +9,7 @@
 
 #include "output-config.h"
 #include "Dashboard.h"
+#include "AuthManager.h"
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -36,34 +37,21 @@ GlobalService& GetGlobalService() {
 }
 
 
-class MultiOutputWidget : public QMainWindow  
-{
-    int dockLocation_;
-    bool dockVisible_;
-    bool reopenShown_;
-    std::string currentBroadcast;
-    QJsonDocument jsonDoc;
-	QJsonObject jsonObj;
-	CURL *curl;
-  	CURLcode res;
-	QString uid , key;
-	QWidget* authWidget;
-     QStackedWidget stackedWidget_;
 
-public:
-    MultiOutputWidget(QWidget* parent = 0)
+    MultiOutputWidget::MultiOutputWidget(QWidget* parent)
         : QMainWindow(parent)
         , reopenShown_(false)
     {
         setWindowTitle(obs_module_text("Title"));
-        connect(&authManager, &AuthManager::authenticationSuccess, this, &MultiOutputWidget::switchToDashboard);
+        
         container_ = new QWidget(&scroll_);
         layout_ = new QVBoxLayout(container_);
         layout_->setAlignment(Qt::AlignmentFlag::AlignTop); 
-        QStackedWidget& stackedWidget = StackedWidgetManager::getInstance().getStackedWidget();
-        AuthManager authManager;    
-            
-        Dashboard dashboardManager;
+
+        connect(&authManager , SIGNAL(authenticationSuccess()) , this , SLOT(switchToDashboard()));
+        connect(&dashboardManager , SIGNAL(logOutDashboard()) , this , SLOT(logOut()));
+        connect(&dashboardManager , SIGNAL(refreshBroadcasts()) , this , SLOT(switchToDashboard()));
+
          if (authManager.isAuthenticated()) {
             dashboardManager.uid = authManager.uid;
             dashboardManager.key = authManager.key;
@@ -75,151 +63,60 @@ public:
             QWidget* authTabWidget = authManager.handleAuthTab();
             stackedWidget_.addWidget(authTabWidget);
         }
-        setCentralWidget(&stackedWidget_);
+       
+     QScrollArea* scrollArea = new QScrollArea;
+     stackedWidget_.setFixedHeight(500);
+    scrollArea->setWidget(&stackedWidget_);
+    scrollArea->setWidgetResizable(true); // Allow the scroll area to resize its contents
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    // Add the scroll area to the layout instead of the stacked widget directly
+    layout_->addWidget(scrollArea);
+
+    // Create and add the footer widget
+    QWidget* footer = footerWidget(); // Create your footer widget here
+    layout_->addWidget(footer);
+
+    // Set the content widget as the central widget
+    setCentralWidget(container_);
 
 
-        // init widget
-        auto addButton = new QPushButton(obs_module_text("Btn.NewTarget"), container_);
-        QObject::connect(addButton, &QPushButton::clicked, [this]() {
-            auto& global = GlobalMultiOutputConfig();
-            auto newid = GenerateId(global);
-            auto target = std::make_shared<OutputTargetConfig>();
-            target->id = newid;
-            global.targets.emplace_back(target);
-            auto pushwidget = createPushWidget(newid, container_);
-            itemLayout_->addWidget(pushwidget);
-            if (pushwidget->ShowEditDlg())
-                SaveConfig();
-            else {
-                auto it = std::find_if(global.targets.begin(), global.targets.end(), [newid](auto& x) {
-                    return x->id == newid;
-                });
-                if (it != global.targets.end())
-                    global.targets.erase(it);
-                delete pushwidget;
-            }
-        });
-        layout_->addWidget(addButton);
-
-        // start all, stop all
-        auto allBtnContainer = new QWidget(this);
-        auto allBtnLayout = new QHBoxLayout();
-        auto startAllButton = new QPushButton(obs_module_text("Btn.StartAll"), allBtnContainer);
-        allBtnLayout->addWidget(startAllButton);
-        auto stopAllButton = new QPushButton(obs_module_text("Btn.StopAll"), allBtnContainer);
-        allBtnLayout->addWidget(stopAllButton);
-        allBtnContainer->setLayout(allBtnLayout);
-        layout_->addWidget(allBtnContainer);
-
-        QObject::connect(startAllButton, &QPushButton::clicked, [this]() {
-            for (auto x : GetAllPushWidgets())
-                x->StartStreaming();
-        });
-        QObject::connect(stopAllButton, &QPushButton::clicked, [this]() {
-            for (auto x : GetAllPushWidgets())
-                x->StopStreaming();
-        });
-        
-        // load config
-        itemLayout_ = new QVBoxLayout(container_);
-        LoadConfig();
-        layout_->addLayout(itemLayout_);
-
-        // donate
-        if (std::string("\xe5\xa4\x9a\xe8\xb7\xaf\xe6\x8e\xa8\xe6\xb5\x81") == obs_module_text("Title"))
-        {
-            auto cr = new QWidget(container_);
-            auto innerLayout = new QGridLayout(cr);
-            innerLayout->setAlignment(Qt::AlignmentFlag::AlignLeft);
-
-            auto label = new QLabel(u8"该插件免费提供，\r\n如您是付费取得，可向商家申请退款\r\n免费领红包或投喂支持插件作者。", cr);
-            innerLayout->addWidget(label, 0, 0, 1, 2);
-            innerLayout->setColumnStretch(0, 4);
-            auto label2 = new QLabel(u8"作者：雷鸣", cr);
-            innerLayout->addWidget(label2, 1, 0, 1, 1);
-            auto btnFeed = new QPushButton(u8"支持", cr);
-            innerLayout->addWidget(btnFeed, 1, 1, 1, 1);
-            
-            QObject::connect(btnFeed, &QPushButton::clicked, [this]() {
-                const char redbagpng[] = 
-                    "iVBORw0KGgoAAAANSUhEUgAAAJgAAACXAQMAAADTWgC3AAAABlBMVEUAAAD///+l2Z/dAAAAAWJLR0Q"
-                    "AiAUdSAAAAAlwSFlzAAAuIwAALiMBeKU/dgAAAWtJREFUSMe1lk2OgzAMhY1YZJkj5CbkYkggcTG4SY"
-                    "6QZRaonmcHqs7PYtTaVVWSLxJu7JfnEP/+0H9ZIaKRA0aZz4QJJXuGQFsJO9HU104H1ihuTENl4IS12"
-                    "YmVcFSa4unJuE2xZV69mOav5XrX6nRgMi6Ii+3Nr9p4k8m7w5OtmOVbzw8ZrOmbxs0Y/ktENMlfnQnx"
-                    "NweG2vB1ZrZCPoyPfmbwXWSPiz1DvIrHwOHgFQsQtTkrmG6McRvqUu4aGbM28Cm1wRM62HtOP2DwkFF"
-                    "ypKVoU/dEa8Y9rtaFJLg5EzscoSfBKMWgZ8aY9bj4EQ1jo9GDIR68kKukMCF/6pPWTPW0R9XulVNzpj"
-                    "6Z5ZzMpOZrzvRElPC49Awx2LOi3k7aP+akhnL1AEMmPYphvtqeGD032TPt5zB2kQBq5Mgo9hrl7lceT"
-                    "MQsEkD80YH1O9xRw9Vzn/cSQ6Y6EK1JH3nVxvss/GCf3L3/YF97Nxv6vuoIAwAAAABJRU5ErkJggg=="
-                    ;
-                const char alipaypng[] = 
-                    "iVBORw0KGgoAAAANSUhEUgAAALsAAAC4AQMAAACByg+HAAAABlBMVEUAAAD///+l2Z/dAAAAAWJLR0Q"
-                    "AiAUdSAAAAAlwSFlzAAAuIwAALiMBeKU/dgAAAVtJREFUWMPNmEGugzAMRM0qx+CmIbkpx8gK1zM2/U"
-                    "L66w4RogqvC5dhxqbm/6/TfgEuwzr8PNwnjhP7pgYNxR1r97XPhUvxjUsPztj0hkJ7O7c4m/V3gCg36"
-                    "r5Q68uA7SHtaC8BlBbP2T4awFNzEaANOtSt4+EPEciEiKJn2eCZJSIQ5XbU5yFt+HNUfIgBNqFo6Grh"
-                    "BDxttIQcoL5ICrsTbdAYWgBPIltxK7uVRaeLQToTFRMbb+JoYoAHjsG63UWXtFIQm2w/mV9x9vodUnC"
-                    "vCWfuiA+oqwaLH7Al8qL/aS4GA9I6zkz/bbFBSsHVKi++Dftg89YC53DDq8iLTJCSVgcq6DlMZGRkzm"
-                    "pBtW2jRRH3flU3UIIacWBLduv0gxzwltGTaUtOFS4HVSJHnBp35jvAsbJnV/RbewWgtLVyAlODkjZSd"
-                    "eMrkNfsIwX3awYfuLLEaGKg/OvlAz+wXVruSNSgAAAAAElFTkSuQmCC";
-                const char wechatpng[] = 
-                    "iVBORw0KGgoAAAANSUhEUgAAAK8AAACtAQMAAAD8lL09AAAABlBMVEUAAAD///+l2Z/dAAAAAWJLR0Q"
-                    "AiAUdSAAAAAlwSFlzAAAuIwAALiMBeKU/dgAAAbpJREFUSMe9l0GugzAMRI26yDJHyE3Si1WiEhcrN8"
-                    "kRWLJA8Z9xaNUv/eUfUIXgqQtn4pkY87+ubv+Cd8O1T3g2y4unzveqxXf3BniUeLKa3XcxrnZr+32zg"
-                    "iXPDvy0S/C04WYo4jpsKCK97FH2K3DovfqzoJzAX9sgwtFVNS/tvH03mwYPs6zb7PjDrf22lAZT6ugq"
-                    "wwtaCzLYWLwO13yUUQl3N70yDSTFWOqCJbORsdloLYguxrSNgxyWhl3Z0l2LjWaZUE541qaRFUqM342"
-                    "5sDTYdY5EZE1KjHU/z25+0UV3yi/GE4LeubHe0V9QYFZjEOhN70QOmp0JocSdGT82Nh+D7nrcQoHkDO"
-                    "GOcmLnhXil3vAsy5nRWhS9SjGkhmMiddHIMO6580oMu5a0xpAC0aOSOHd0mC+jodjNnhyVqDH1Tj3Ts"
-                    "0hEm3CGv7dYhDkdQGr0cOJxxquMM02GI44g+tKiqwwZVd4HugjHfOKxeEYvQ9jVOKawzrRnQkQSf4Yz"
-                    "EeasiWHhwfYNF8WkIscc985pKCaGSzA9S6eGAmpMvRlFzonBLZ6qFp8nyhxSM/IP+3x2arDwc/kHxnM"
-                    "tm62qBBUAAAAASUVORK5CYII=";
-                auto donateWnd = new QDialog();
-                donateWnd->setWindowTitle(u8"赞助");
-                QTabWidget* tab = new QTabWidget(donateWnd);
-                auto redbagQr = new QLabel(donateWnd);
-                auto redbagQrBmp = QPixmap::fromImage(QImage::fromData(QByteArray::fromBase64(QByteArray::fromRawData(redbagpng, sizeof(redbagpng) - 1)), "png"));
-                redbagQr->setPixmap(redbagQrBmp);
-                tab->addTab(redbagQr, u8"支付宝领红包");
-                auto aliQr = new QLabel(donateWnd);
-                auto aliQrBmp = QPixmap::fromImage(QImage::fromData(QByteArray::fromBase64(QByteArray::fromRawData(alipaypng, sizeof(alipaypng) - 1)), "png"));
-                aliQr->setPixmap(aliQrBmp);
-                tab->addTab(aliQr, u8"支付宝打赏");
-                auto weQr = new QLabel(donateWnd);
-                auto weQrBmp = QPixmap::fromImage(QImage::fromData(QByteArray::fromBase64(QByteArray::fromRawData(wechatpng, sizeof(wechatpng) - 1)), "png"));
-                weQr->setPixmap(weQrBmp);
-                tab->addTab(weQr, u8"微信打赏");
-
-                auto layout = new QGridLayout();
-                layout->setRowStretch(0, 1);
-                layout->setColumnStretch(0, 1);
-                layout->addWidget(new QLabel(u8"打赏并非购买，不提供退款。", donateWnd), 0, 0);
-                layout->addWidget(tab, 1, 0);
-                donateWnd->setLayout(layout);
-                donateWnd->setMinimumWidth(360);
-                donateWnd->exec();
-            });
-
-            layout_->addWidget(cr);
-        }
-        else
-        {
-            auto label = new QLabel(u8"<p>This plugin is provided for free. <br>Author: SoraYuki (<a href=\"https://paypal.me/sorayuki0\">donate</a>) </p>", container_);
-            label->setTextFormat(Qt::RichText);
-            label->setTextInteractionFlags(Qt::TextBrowserInteraction);
-            label->setOpenExternalLinks(true);
-            layout_->addWidget(label);
-        }
-
-        scroll_.setWidgetResizable(true);
-        scroll_.setWidget(container_);
-
-        auto fullLayout = new QGridLayout(this);
-        fullLayout->setContentsMargins(0, 0, 0, 0);
-        fullLayout->setRowStretch(0, 1);
-        fullLayout->setColumnStretch(0, 1);
-        fullLayout->addWidget(&scroll_, 0, 0);
+      
     }
 
 
-    void visibleToggled(bool visible)
+    QWidget* MultiOutputWidget::footerWidget() {
+        QWidget* footer = new QWidget;
+
+        // Assuming this code is within the footerWidget setup function
+
+        // Create a layout for the footer
+        QVBoxLayout* footerLayout = new QVBoxLayout;
+
+        // First QLabel
+        auto watchLabel = new QLabel(u8"<p><a href=\"https://app.streamway.in/account/obs\">Watch how to use plugin</a></p>");
+        watchLabel->setTextFormat(Qt::RichText);
+        watchLabel->setWordWrap(true);
+        watchLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        watchLabel->setOpenExternalLinks(true);
+        footerLayout->addWidget(watchLabel);
+
+        // Second QLabel
+        auto supportLabel = new QLabel(u8"<p>Any Help <a href=\"https://support.streamway.in/contact/\">Contact Us</a></p>");
+        supportLabel->setTextFormat(Qt::RichText);
+        supportLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        supportLabel->setOpenExternalLinks(true);
+        supportLabel->setWordWrap(true);
+        footerLayout->addWidget(supportLabel);
+
+        // Set the footer layout to your footer widget
+        footer->setLayout(footerLayout);
+
+        return footer;
+};
+
+    void MultiOutputWidget::visibleToggled(bool visible)
     {
         dockVisible_ = visible;
 
@@ -237,7 +134,7 @@ public:
         }
     }
 
-    std::vector<PushWidget*> GetAllPushWidgets()
+    std::vector<PushWidget*> MultiOutputWidget::GetAllPushWidgets()
     {
         std::vector<PushWidget*> result;
         for(auto& c : container_->children())
@@ -251,12 +148,12 @@ public:
         return result;
     }
 
-    void SaveConfig()
+    void MultiOutputWidget::SaveConfig()
     {
         SaveMultiOutputConfig();
     }
 
-    void LoadConfig()
+    void MultiOutputWidget::LoadConfig()
     {
         for(auto x: GetAllPushWidgets()) {
             delete x;
@@ -274,29 +171,95 @@ public:
         }
     }
 
-private:
-    QWidget* container_ = 0;
-    QScrollArea scroll_;
-    QVBoxLayout* itemLayout_ = 0;
-    QVBoxLayout* layout_ = 0;
+    void MultiOutputWidget::startStreamingListner(){
+		std::string currBrod ;
+	   auto profiledir = obs_frontend_get_current_profile_path();
+     if (profiledir) {
+        QString filename = QString::fromStdString(std::string(profiledir) + "/obs-multi-rtmp_auth.json");
+        QFile file(filename);
 
-private:
-    AuthManager authManager;
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QByteArray jsonData = file.readAll();
+            QJsonDocument jsonDoc(QJsonDocument::fromJson(jsonData));
 
-public slots:
-    void switchToDashboard();
-};
+            if (!jsonDoc.isNull() && jsonDoc.isObject()) {
+                QJsonObject jsonObject = jsonDoc.object();
 
+                if (jsonObject.contains("current_broadcast")) {
+                    currBrod = jsonObject["current_broadcast"].toString().toStdString();
+                    // Do something with currBroadcast (e.g., use it further in your code)
+                }
+            }
+
+            file.close();
+        }
+        bfree(profiledir);
+    }
+
+			
+				CURL *curl;
+				curl = curl_easy_init();
+				std::string url = "https://testapi.streamway.in/v1/webhook/obs/" + currBrod
+				;
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
+				curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+			   	// Set authentication
+    			curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    			curl_easy_setopt(curl, CURLOPT_USERNAME, uid.toStdString().c_str());
+    			curl_easy_setopt(curl, CURLOPT_PASSWORD, key.toStdString().c_str());
+
+				struct curl_slist *headers = NULL;
+				headers = curl_slist_append(headers, "Accept: */*");
+				headers = curl_slist_append(headers, "Content-Type: application/json");
+				headers = curl_slist_append(headers, "obs-webhook-auth: b1d66555d2a1cfe4e773457dd44dc664");
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+			
+
+				CURLcode ret = curl_easy_perform(curl);
+
+				long response_code;
+					curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+	    			if (response_code != 200) {
+        				curl_easy_cleanup(curl);
+    				}
+
+	  			curl_easy_cleanup(curl);
+				curl = NULL;
+			
+
+			
+}
 
 
 void MultiOutputWidget::switchToDashboard() {
-    Dashboard dashboardManager;
     dashboardManager.uid = authManager.uid;
     dashboardManager.key = authManager.key;
     QWidget* dashboardWidget = dashboardManager.handleTab();
+     while (stackedWidget_.count() > 0) {
+        QWidget* widget = stackedWidget_.widget(0);
+        stackedWidget_.removeWidget(widget);
+        delete widget;
+    };
     stackedWidget_.addWidget(dashboardWidget);
     stackedWidget_.setCurrentWidget(dashboardWidget);
-}
+};
+
+void MultiOutputWidget::logOut() {
+     auto profiledir = obs_frontend_get_current_profile_path();
+    if (profiledir) {
+        std::string filename = profiledir;
+        filename += "/obs-multi-rtmp_auth.json";
+
+        // Delete the file
+        std::filesystem::remove(filename);
+    }
+
+    bfree(profiledir);
+    QWidget* authTabWidget = authManager.handleAuthTab();
+    stackedWidget_.addWidget(authTabWidget);
+    stackedWidget_.setCurrentWidget(authTabWidget);
+};
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-multi-rtmp", "en-US")
@@ -338,7 +301,12 @@ bool obs_module_load()
             else if (event == obs_frontend_event::OBS_FRONTEND_EVENT_PROFILE_CHANGED)
             {
                 dock->LoadConfig();
-            }
+            }else if (event ==
+					obs_frontend_event::
+					OBS_FRONTEND_EVENT_STREAMING_STARTING){
+						MultiOutputWidget myWidget;
+						myWidget.startStreamingListner(); // Call the member function using the object
+					}
         }, dock
     );
 

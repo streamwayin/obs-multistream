@@ -64,20 +64,19 @@ void LoadConfig() {
 }
 
 
-
 static size_t writeCallback(void *ptr, size_t size, size_t nmemb, void *stream) {
   std::string *data = (std::string *)stream;
   data->append((char *)ptr, size * nmemb);
   return size * nmemb;
 };
 
-void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *newUiLayout , QTabWidget *tabWidget) {
+void Dashboard::handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *newUiLayout , QTabWidget *tabWidget) {
 	QPushButton *refreshButton = new QPushButton("Refresh");
     newUiLayout->addWidget(refreshButton);
+	newUiLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 
-	  QObject::connect(refreshButton, &QPushButton::clicked, [=]() {
-		tabWidget->update();
-		tabWidget->repaint();
+	  QObject::connect(refreshButton, &QPushButton::clicked, [this]() {
+			emit refreshBroadcasts();
 	  });
 
 	CURL *curl;
@@ -143,13 +142,16 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
 		// Create a scroll area and set up a widget to contain the items
 		QScrollArea* scrollArea = new QScrollArea;
 		QWidget* scrollWidget = new QWidget;
-
+		
 		// scrollWidget->resize(300,300);
 		scrollArea->setWidgetResizable(true);
 		scrollArea->setWidget(scrollWidget);
-
+		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		
 		// Create a layout for the widget inside the scroll area
 		QVBoxLayout* scrollLayout = new QVBoxLayout(scrollWidget);
+		scrollLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 		// Set the margins of the layout to zero (removing spacing)
 		// scrollLayout->setContentsMargins(0, 0, 0, 0);
 		for (const auto& jsonObject : j3) {
@@ -163,7 +165,7 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
 			// Create a group for title and scheduledTime
             QGroupBox* titleScheduledGroup = new QGroupBox;
             QVBoxLayout* titleScheduledLayout = new QVBoxLayout(titleScheduledGroup);
-
+			titleScheduledLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 			// Set a fixed size for the QGroupBox
 			titleScheduledGroup->setMinimumSize(220, 110); // Set the minimum width and height
 
@@ -175,7 +177,7 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
 			titleLabel->setWordWrap(true);
 			titleLabel->setStyleSheet("QLabel{font-size: 17px;font-family: Arial;}"); 
             titleScheduledLayout->addWidget(titleLabel);
-
+			titleScheduledLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 
             // Show scheduledTime from jsonObject
             QString scheduledTimeStr = QString::fromStdString(jsonObject["scheduledTime"].get<std::string>());
@@ -203,7 +205,7 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
    						currentBroadcast = currentBroadcast.substr(1, currentBroadcast.size() - 2);
 					}
 					 auto profiledir = obs_frontend_get_current_profile_path();
-        if (profiledir) {
+        			if (profiledir) {
             std::string filename = profiledir;
             filename += "/obs-multi-rtmp_auth.json";
 
@@ -229,7 +231,7 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
             // Write the updated content back to the file
             os_quick_write_utf8_file_safe(filename.c_str(), content.c_str(), content.size(), true, "tmp", "bak");
         }
-        bfree(profiledir);
+        			bfree(profiledir);
 
                 	auto &global = GlobalMultiOutputConfig();
 				
@@ -245,6 +247,12 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
     			obs_data_t *settings = obs_service_get_settings(service);
     			// cout << obs_data_get_json_pretty(settings) << endl;
 				QString url = firstDestination["url"].get<std::string>().c_str();
+
+				// Remove the trailing slash if it exists
+				if (!url.isEmpty() && url.endsWith('/')) {
+    				url.chop(1); // Remove the last character (which is '/')
+				}
+
         		QString key = firstDestination["key"].get<std::string>().c_str();
 				obs_data_set_string(settings, "key", key.toStdString().c_str());
 				obs_data_set_string(settings, "server", url.toStdString().c_str());
@@ -283,7 +291,7 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
 			// Add the title and scheduledTime group to the item layout
             itemLayout->addWidget(titleScheduledGroup);
 
-
+			itemLayout->setContentsMargins(0, 0, 0, 0);
 
             // Add the custom widget to the scroll layout
             scrollLayout->addWidget(itemWidget);
@@ -293,8 +301,8 @@ void handleSuccessfulLogin(const QString& uid, const QString& key, QVBoxLayout *
    
 }
 
-// Add the scroll area to your main layout or window
-newUiLayout->addWidget(scrollArea);
+		// Add the scroll area to your main layout or window
+		newUiLayout->addWidget(scrollArea);
 
 	}else{
 			auto label = new QLabel(
@@ -329,29 +337,22 @@ newUiLayout->addWidget(buttonContainer);
 
 
 // Function to create Tab 1 and its content
-QWidget* createTab1(const QString& uid, const QString& key , QTabWidget *tabWidget) {
+QWidget* Dashboard::createTab1(const QString& uid, const  QString& key , QTabWidget *tabWidget) {
     QWidget* tab1 = new QWidget;
     QVBoxLayout* tab1Layout = new QVBoxLayout(tab1);
-	tab1->setFixedSize(320, 550);
+	
 	handleSuccessfulLogin(uid , key , tab1Layout , tabWidget);
     return tab1;
 };
 
 // Function to create Tab 2 and its content
-QWidget* createTab2( const QString& uid, const QString& key , QTabWidget *tabWidget) {
+QWidget* Dashboard::createTab2( const QString& uid, const QString& key , QTabWidget *tabWidget) {
 	// QScrollArea* scrollArea = new QScrollArea;
     QWidget* tab2 = new QWidget;
     tab2Layout = new QVBoxLayout(tab2);
 	tab2Layout->setContentsMargins(0, 0, 0, 0); // Set all margins to zero
-	tab2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-	
-
-	// scrollArea->resize(300,300);
-	// scrollArea->setWidgetResizable(true);
-	// scrollArea->setWidget(tab2);
-	tab2->setMinimumWidth(150);
-    tab2->setMaximumWidth(250);
-	// tab2Layout->addWidget(scrollArea);
+	// tab2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+	tab2Layout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 	// init widget
 		auto addButton = new QPushButton(
 			obs_module_text("Btn.NewTarget"), container_);
@@ -378,10 +379,11 @@ QWidget* createTab2( const QString& uid, const QString& key , QTabWidget *tabWid
 		
 		// start all, stop all
 		auto allBtnContainer = new QWidget();
-		allBtnContainer->setStyleSheet("background-color: lightblue;"); // Change color as needed
+		
 		allBtnContainer->setMaximumHeight(70);
 		// allBtnContainer->setStyleSheet("background-color: lightblue;"); // Change color as needed
 		auto allBtnLayout = new QHBoxLayout(allBtnContainer);
+		allBtnLayout->setAlignment(Qt::AlignmentFlag::AlignTop);
 		auto startAllButton = new QPushButton(
 			obs_module_text("Btn.StartAll"), allBtnContainer);
 		allBtnLayout->addWidget(startAllButton);
@@ -393,44 +395,53 @@ QWidget* createTab2( const QString& uid, const QString& key , QTabWidget *tabWid
 		auto endAllBroadcastButton = new QPushButton("End Broadcast & Stop All");
 		tab2Layout->addWidget(endAllBroadcastButton);
 		// endAllBroadcastButton->setEnabled(false);
-		tab2Layout->setContentsMargins(0, 0, 0, 0);
+		
 
-		QObject::connect(endAllBroadcastButton, &QPushButton::clicked, [ uid , key , tabWidget]() {
-			obs_frontend_streaming_stop();
-			CURL *curl;
-    		
-			curl = curl_easy_init();
+		QObject::connect(endAllBroadcastButton, &QPushButton::clicked, [this, uid, key, tabWidget]() {
+    		try {
+        obs_frontend_streaming_stop();
+        CURL *curl;
+        curl = curl_easy_init();
 
-			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-			std::string url = "https://testapi.streamway.in/v1/broadcasts/" + currentBroadcast;
-			curl_easy_setopt(curl, CURLOPT_URL,url.c_str());
-			   // Set authentication
-    		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    		curl_easy_setopt(curl, CURLOPT_USERNAME, uid.toStdString().c_str());
-    		curl_easy_setopt(curl, CURLOPT_PASSWORD, key.toStdString().c_str());
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        std::string url = "https://testapi.streamway.in/v1/broadcasts/" + currentBroadcast;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        // Set authentication
+        curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_easy_setopt(curl, CURLOPT_USERNAME, uid.toStdString().c_str());
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, key.toStdString().c_str());
 
-			struct curl_slist *headers = NULL;
-			headers = curl_slist_append(headers, "Accept: */*");
-			headers = curl_slist_append(headers, "Content-Type: application/json");
-			
-			curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-			
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Accept: */*");
+        headers = curl_slist_append(headers, "Content-Type: application/json");
 
-			CURLcode ret = curl_easy_perform(curl);
-			long response_code;
-			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    		// Check for errors
-    		if (response_code != 200) {
-    		    curl_easy_cleanup(curl);
-    		    // return false;
-    		}
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    		// Cleanup
-    		curl_easy_cleanup(curl);
-			curl = NULL;
-			tabWidget->setCurrentIndex(0);
-			
-		});
+        CURLcode ret = curl_easy_perform(curl);
+        long response_code;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        // Check for errors
+        if (response_code != 200) {
+            curl_easy_cleanup(curl);
+            // return false;
+        }
+
+        // Cleanup
+        curl_easy_cleanup(curl);
+        curl = NULL;
+        // emit refreshBroadcasts();
+
+        tabWidget->setCurrentIndex(0);
+    } catch (const std::exception& e) {
+        // Handle the exception
+        // Log or display an error message
+        qDebug() << "Exception occurred: " << e.what();
+    } catch (...) {
+        // Catch any other unexpected exceptions
+        qDebug() << "Unknown exception occurred" ;
+    }
+});
+
 
 
 		QObject::connect(startAllButton, &QPushButton::clicked,
@@ -456,55 +467,24 @@ QWidget* createTab2( const QString& uid, const QString& key , QTabWidget *tabWid
     return tab2;
 };
 
-
-
 // Function to create Tab 1 and its content
-QWidget* createTab3() {
+QWidget* Dashboard::createTab3() {
 QWidget* tab3 = new QWidget;
 
 QVBoxLayout* tab3Layout = new QVBoxLayout(tab3);
-
+tab3Layout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 		auto logOutButton = new QPushButton("LogOut" , tab3);
 		tab3Layout->addWidget(logOutButton);
 		QObject::connect(logOutButton, &QPushButton::clicked,
-				 []() {
-					auto profiledir = obs_frontend_get_current_profile_path();
-        if (profiledir) {
-            std::string filename = profiledir;
-            filename += "/obs-multi-rtmp_auth.json";
-
-            // Read existing JSON content from the file
-            std::ifstream inFile(filename);
-            nlohmann::json configJson;
-
-            if (inFile.is_open()) {
-                inFile >> configJson;
-                inFile.close();
-            } 
-
-            // Update uid and key in the existing JSON object
-            configJson["uid_key"]["uid"] ="";
-            configJson["uid_key"]["key"] =  "";
-			 
-
-            // Convert the updated JSON to a string
-            std::string content = configJson.dump();
-
-			
-
-            // Write the updated content back to the file
-            os_quick_write_utf8_file_safe(filename.c_str(), content.c_str(), content.size(), true, "tmp", "bak");
-        }
-        bfree(profiledir);
-
-		// recreateUILayout(newUiLayout);
+				 [this]() {
+				emit logOutDashboard();
 
  });
 
 QString quote = "Credit -> obs-multi-rtmp plugin by sorayuki\n"
-				"This plugin is an extention of obs-multi-rtmp and it intents to empower users to multistream from within OBS itself. "
-				"Purpose of plugin is to let user schedule event from within the OBS studio itself rathar than opening multiple tabs of diffrent social platforms like youtube and facebook and manually copy pasting the keys etc. "
-				"https://github.com/sorayuki/obs-multi-rtmp";
+				"This plugin is an extention of obs-multi-rtmp and it intents to empower users to multistream from within OBS \n itself. "
+				"Purpose of plugin is to let user schedule event from within the OBS studio itself rathar than opening \n multiple tabs of diffrent social platforms like youtube and facebook and manually \n copy pasting the keys etc. "
+				"\n https://github.com/sorayuki/obs-multi-rtmp";
 			
 
 QLabel* quoteLabel = new QLabel(quote);
@@ -520,6 +500,7 @@ QWidget* Dashboard::handleTab() {
 	// Create a QTabWidget to hold the tabs
 
         container_ = new QWidget();
+		
         layout_ = new QVBoxLayout(container_);
         layout_->setAlignment(Qt::AlignmentFlag::AlignTop); 
 
@@ -529,8 +510,9 @@ QWidget* Dashboard::handleTab() {
     QWidget* tab3 = createTab3();
 
     // Set size policies to prevent unnecessary space
-    tabWidget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    // tabWidget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     // tab2->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+	// container_->setMaximumSize(250, 370);
     tab3->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 
 	 // Set fixed sizes for tabs
@@ -539,7 +521,7 @@ QWidget* Dashboard::handleTab() {
     tab3->setMaximumSize(250, 270); // Set maximum width and height for tab3
 
 	 // Set background color for each tab
-    // tab1->setStyleSheet("background-color: lightblue;"); // Change color as needed
+    // container_->setStyleSheet("background-color: lightblue;"); // Change color as needed
     // tab2->setStyleSheet("background-color: lightgreen;"); // Change color as needed
     // tab3->setStyleSheet("background-color: lightyellow;"); // Change color as needed
 

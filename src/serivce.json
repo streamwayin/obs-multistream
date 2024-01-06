@@ -1,0 +1,27 @@
+{
+    "name": "Streamway",
+    "common": false,
+    "more_info_link": "https://support.streamway.in/how-to-connect-obs-studio-to-streamway/",
+    "stream_key_link": "https://app.streamway.in/live_dashboard",
+    "alt_names": [
+        ""
+    ],
+    "servers": [
+        {
+            "name": "RTMP Primary",
+            "url": "rtmp://injest.streamway.in/LiveApp"
+        },
+        {
+            "name": "RTMP Backup",
+            "url": "rtmps://bkp.streamway.in:443/live"
+        }
+    ],
+    "protocol": "RTMP",
+    "supported video codecs": [
+        "h264"
+    ],
+    "recommended": {
+        "keyint": 2,
+        "max video bitrate": 9000
+    }
+}

@@ -4,7 +4,8 @@
 #include <QWidget>
 #include <QString>
 #include <QObject>
-
+#include <QTabWidget>
+// #include "Dashboard.h"
 
 class AuthManager  : public QObject {
     Q_OBJECT
@@ -13,7 +14,7 @@ public:
 
     bool isAuthenticated();
     QWidget* handleAuthTab();
-
+    QWidget* LoginWithAPIKeyWidget(QTabWidget *tabWidget);
 public:
     QString uid;
     QString key;

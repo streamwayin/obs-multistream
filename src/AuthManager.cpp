@@ -8,10 +8,11 @@
 #include "Dashboard.h"
 #include "AuthManager.h"
 #include "output-config.h"
+#include "obs-multi-rtmp.h"
 
 using Json = nlohmann::json;
 
-AuthManager authManager;
+
 
 // QString uid; // Declare uid globally
 // QString key; // Declare key globally
@@ -65,7 +66,7 @@ bool sendHttpRequest(std::string &url, std::string &authHeader, std::string &res
     };
 
     // Set the URL
-    curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8000/v1/obs/version");
+    curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/obs/version");
 
     // Set the request method to GET
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -178,7 +179,7 @@ QString keyQString;
 			curl = curl_easy_init();
 
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-			curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8000/v1/otp/obs/phone/send");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/otp/obs/phone/send");
 			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
 
@@ -237,7 +238,7 @@ QString keyQString;
 			curl = curl_easy_init();
 
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-			curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8000/v1/otp/obs/verify");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/otp/obs/verify");
 			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
 
@@ -436,10 +437,10 @@ QWidget* LoginWithEmailWidget(QTabWidget *tabWidget) {
 }
 
 
-QWidget* LoginWithAPIKeyWidget(QTabWidget *tabWidget) {
+QWidget* AuthManager::LoginWithAPIKeyWidget(QTabWidget *tabWidget) {
 	 QWidget* loginWithAPIKeyWidget = new QWidget;
     QVBoxLayout* LoginLayout = new QVBoxLayout(loginWithAPIKeyWidget);
-
+	LoginLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 	QLabel* sloganLabel_ = new QLabel("Get More Views By Multistreaming Directly From OBS", loginWithAPIKeyWidget);
 	sloganLabel_->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
 	LoginLayout->addWidget(sloganLabel_);
@@ -481,7 +482,7 @@ LoginLayout->addLayout(keyLayout);
 		errorL->setVisible(false);
 
 
-		QObject::connect(verifyButton_, &QPushButton::clicked, [errorL,scrollLayout , scrollWidget , uidLineEdit_ , keyLineEdit_ ,verifyButton_ , codeLabel_  , uidLabel_ ,tabWidget]() {
+		QObject::connect(verifyButton_, &QPushButton::clicked, [this , errorL,scrollLayout , scrollWidget , uidLineEdit_ , keyLineEdit_ ,verifyButton_ , codeLabel_  , uidLabel_ ,tabWidget]() {
 			// Get the code entered by the user
 			QString uid = uidLineEdit_->text();
 			QString key = keyLineEdit_->text();
@@ -533,8 +534,9 @@ LoginLayout->addLayout(keyLayout);
         }
         bfree(profiledir);
 
-   
-		emit authManager.authenticationSuccess();
+		isAuthenticated();
+		emit authenticationSuccess();
+		
 	
 	}catch (const std::exception& e) {
         std::cerr << "Exception caught: " << e.what() << std::endl;
