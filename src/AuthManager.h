@@ -15,6 +15,9 @@ public:
     bool isAuthenticated();
     QWidget* handleAuthTab();
     QWidget* LoginWithAPIKeyWidget(QTabWidget *tabWidget);
+    QWidget* LoginWithPhoneWidget(QTabWidget *tabWidget);
+    QWidget* LoginWithEmailWidget(QTabWidget *tabWidget);
+
 public:
     QString uid;
     QString key;

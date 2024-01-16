@@ -6,12 +6,17 @@
 #include <QVBoxLayout>
 #include <QTabWidget>
 
+class PushWidget;
+
+
 class Dashboard : public QObject {
     Q_OBJECT
 
 public:
     Dashboard();
-    
+    std::vector<PushWidget*> GetAllPushWidgets();
+    void SaveConfig();
+    void LoadConfig();
     QWidget* handleTab();
     QWidget* createTab3();
     QWidget* createTab1(const QString& uid, const QString& key , QTabWidget *tabWidget);
@@ -24,6 +29,10 @@ public:
 signals:
     void logOutDashboard();
     void refreshBroadcasts();
+
+private:
+    AuthManager authManager ;
+    
 };
 
 #endif // DASHBOARD_H

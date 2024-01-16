@@ -4,8 +4,9 @@
 #include "push-widget.h"
 #include "edit-widget.h"
 #include "output-config.h"
-
+#include <filesystem>
 #include "obs.hpp"
+#include "plugin-support.h"
 
 class IOBSOutputEventHanlder
 {
@@ -573,6 +574,8 @@ public:
         }
     }
 
+
+
     void StopStreaming() override {
         if (!IsRunning())
             return;
@@ -595,6 +598,128 @@ public:
             obs_output_force_stop(output_);
     }
    
+void startStreamingListner() {
+        try {
+        std::string uids , keys;
+        std::string currBrod;
+        auto profiledir = obs_frontend_get_current_profile_path();
+
+        if (profiledir) {
+            QString filename = QString::fromStdString(std::string(profiledir) + "/obs-multi-rtmp_auth.json");
+            QFile file(filename);
+
+            if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                QByteArray jsonData = file.readAll();
+                QJsonDocument jsonDoc(QJsonDocument::fromJson(jsonData));
+
+                if (!jsonDoc.isNull() && jsonDoc.isObject()) {
+                    QJsonObject jsonObject = jsonDoc.object();
+
+                    if (jsonObject.contains("current_broadcast")) {
+                        QJsonValue currentBroadcastValue = jsonObject["current_broadcast"];
+
+                        if (currentBroadcastValue.isObject()) {
+                            QJsonObject currentBroadcast = currentBroadcastValue.toObject();
+
+                            if (currentBroadcast.contains("id")) {
+                                QString idValue = currentBroadcast["id"].toString();
+                                currBrod = idValue.toStdString();
+                                // Use currBrod further in your code
+                            }
+                        }
+                    }
+                
+
+                if (jsonObject.contains("uid_key")) {
+                        QJsonValue authValue = jsonObject["uid_key"];
+
+                        if (authValue.isObject()) {
+                            QJsonObject authObj = authValue.toObject();
+
+                            if (authObj.contains("uid")) {
+                                QString uid = authObj["uid"].toString();
+                                uids = uid.toStdString();
+                                QString key = authObj["key"].toString();
+                                keys = key.toStdString();
+                            }
+                        }
+                    }
+                }
+            }
+
+                file.close();
+            }
+
+            bfree(profiledir);
+        
+
+        if (!currBrod.empty()) {
+            std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+
+            if (curl) {
+                std::string url = "https://api.streamway.in/v1/webhook/obs/" + currBrod;
+
+                curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "PATCH");
+                curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+                // Set authentication
+                curl_easy_setopt(curl.get(), CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+                curl_easy_setopt(curl.get(), CURLOPT_USERNAME, uids.c_str());
+                curl_easy_setopt(curl.get(), CURLOPT_PASSWORD, keys.c_str());
+
+                struct curl_slist *headers = nullptr;
+                headers = curl_slist_append(headers, "Accept: */*");
+                headers = curl_slist_append(headers, "Content-Type: application/json");
+                headers = curl_slist_append(headers, "obs-webhook-auth: b1d66555d2a1cfe4e773457dd44dc664");
+                curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
+
+                CURLcode ret = curl_easy_perform(curl.get());
+
+                long response_code;
+                curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code);
+
+                if (response_code == 200) {
+                    auto profiledir = obs_frontend_get_current_profile_path();
+
+                    if (profiledir) {
+                        std::string filename = profiledir;
+                        filename += "/obs-multi-rtmp_auth.json";
+
+                        // Read existing JSON content from the file
+                        std::ifstream inFile(filename);
+                        nlohmann::json configJson;
+
+                        if (inFile.is_open()) {
+                            inFile >> configJson;
+                            inFile.close();
+                        }
+
+                        // Create an object for the current broadcast with id and status
+                        nlohmann::json currentBroadcastObj;
+
+                        currentBroadcastObj["status"] = "live";
+                        currentBroadcastObj["id"] = currBrod;
+                        // Update uid and key in the existing JSON object
+                        configJson["current_broadcast"] = currentBroadcastObj;
+
+                        // Convert the updated JSON to a string
+                        std::string content = configJson.dump();
+
+                        // Write the updated content back to the file
+                        os_quick_write_utf8_file_safe(filename.c_str(), content.c_str(), content.size(), true, "tmp", "bak");
+                    }
+                    bfree(profiledir);
+                }
+            } else {
+                // Log an error if curl initialization fails
+                obs_log(LOG_INFO, "Failed to initialize CURL");
+            }
+        }
+    } catch (const std::exception &e) {
+            obs_log(LOG_INFO, "Error: %s", e.what());
+        }
+    }
+
+
     void OnOBSEvent(obs_frontend_event ev) override
     {
         if (ev == obs_frontend_event::OBS_FRONTEND_EVENT_EXIT
@@ -603,8 +728,9 @@ public:
         ) {
             Stop();
         } else if (ev == obs_frontend_event::OBS_FRONTEND_EVENT_STREAMING_STARTING) {
-            if (!IsRunning() && config_->syncStart) {
+            if (!IsRunning() && config_->syncStart) { 
                 StartStop();
+                startStreamingListner();
             }
         } else if (ev == obs_frontend_event::OBS_FRONTEND_EVENT_STREAMING_STOPPING) {
             if (IsRunning() && config_->syncStart) {

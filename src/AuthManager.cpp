@@ -44,6 +44,7 @@ bool AuthManager::isAuthenticated() {
             file.close();
         }
         bfree(profiledir);
+		
     }
     return false; // Return false if authentication fails or file reading fails
 }
@@ -55,7 +56,7 @@ static size_t writeCallback(void *ptr, size_t size, size_t nmemb, void *stream) 
   return size * nmemb;
 };
 
-bool sendHttpRequest(std::string &url, std::string &authHeader, std::string &response, const QString& uid, const QString& key) {
+bool sendHttpRequest( const QString& uid, const QString& key) {
     CURL *curl;
     CURLcode res;
 
@@ -66,7 +67,7 @@ bool sendHttpRequest(std::string &url, std::string &authHeader, std::string &res
     };
 
     // Set the URL
-    curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/obs/version");
+    curl_easy_setopt(curl, CURLOPT_URL, "https://api.streamway.in/v1/obs/version");
 
     // Set the request method to GET
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -108,20 +109,21 @@ bool sendHttpRequest(std::string &url, std::string &authHeader, std::string &res
 
 
 
-QWidget* LoginWithPhoneWidget(QTabWidget *tabWidget) {
+QWidget* AuthManager::LoginWithPhoneWidget(QTabWidget *tabWidget) {
     QWidget* loginWithPhoneWidget = new QWidget;
 QVBoxLayout* LoginLayout = new QVBoxLayout(loginWithPhoneWidget);
-
-QLabel* sloganLabel_ = new QLabel("Get More Views By Multistreaming Directly From OBS", loginWithPhoneWidget);
-sloganLabel_->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
-LoginLayout->addWidget(sloganLabel_);
-sloganLabel_->setWordWrap(true);
+LoginLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
+// QLabel* sloganLabel_ = new QLabel("Get More Views By Multistreaming Directly From OBS", loginWithPhoneWidget);
+// sloganLabel_->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
+// LoginLayout->addWidget(sloganLabel_);
+// sloganLabel_->setWordWrap(true);
 
 QWidget* scrollWidget = new QWidget;
 		// scrollArea->setWidgetResizable(true);
 		
 		// Create a layout for the widget inside the scroll area
 		QVBoxLayout* scrollLayout = new QVBoxLayout(scrollWidget);
+		scrollLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 		LoginLayout->addWidget(scrollWidget);
 		scrollWidget->setVisible(false);
 
@@ -130,6 +132,7 @@ QLabel* phone_ = new QLabel("Enter Phone Number");
 LoginLayout->addWidget(phone_);
 
 auto horizontalPhoneLayout = new QHBoxLayout;
+horizontalPhoneLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 QLineEdit* prePhoneLineEdit_ = new QLineEdit();
 prePhoneLineEdit_->setText("+91");
 prePhoneLineEdit_->setMaximumWidth(40);
@@ -166,20 +169,20 @@ errorL->setVisible(false);
 QString uidQString;
 QString keyQString;
 
-		QObject::connect(getOTPButton_ , &QPushButton::clicked, [scrollLayout , scrollWidget  ,phone_ , phoneLineEdit_ , getOTPButton_ , prePhoneLineEdit_ , otpLineEdit_ , verifyOTPButton_  ,errorL ](){
+		QObject::connect(getOTPButton_ , &QPushButton::clicked, [scrollLayout , scrollWidget  ,phone_ , phoneLineEdit_ , getOTPButton_ , prePhoneLineEdit_ , otpLineEdit_ , verifyOTPButton_  ,errorL , tabWidget](){
 			QString fullPhoneNumber_ = prePhoneLineEdit_->text() + phoneLineEdit_->text();
 			
 			Json jsonObject;
 			jsonObject["phoneNumber"] = fullPhoneNumber_.toStdString();
-			   // Convert JSON object to string
-    			std::string jsonData = jsonObject.dump(2);
+			// Convert JSON object to string
+    		std::string jsonData = jsonObject.dump(2);
 
 			CURL *curl;
     		
 			curl = curl_easy_init();
 
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-			curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/otp/obs/phone/send");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://api.streamway.in/v1/otp/obs/phone/send");
 			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
 
@@ -201,7 +204,22 @@ QString keyQString;
         			errorMessage.setWindowTitle("Error");
         			errorMessage.setText("This Phone Number is Not Registerd On Streamway!");
         			errorMessage.setIcon(QMessageBox::Critical);
-        			errorMessage.exec();
+
+					// Set informative text with a clickable link
+					errorMessage.setInformativeText("<a href='https://app.streamway.in/signup'>SignUp Here</a>");
+
+					// Make the text clickable
+					errorMessage.setTextInteractionFlags(Qt::TextBrowserInteraction);
+
+        			// Show the message box and wait for user interaction
+					int result = errorMessage.exec();
+					
+					if (result == QMessageBox::Ok) {
+    					// User clicked OK, redirect to the specified URL
+    					QUrl url("https://app.streamway.in/signup");
+    					QDesktopServices::openUrl(url);
+					}
+					
     			}else{
 					phoneLineEdit_->setReadOnly(true);
 					prePhoneLineEdit_->setReadOnly(true);
@@ -219,7 +237,7 @@ QString keyQString;
 			
 		});
 
-		QObject::connect(verifyOTPButton_ , &QPushButton::clicked, [scrollLayout , scrollWidget  ,phone_ , phoneLineEdit_ , getOTPButton_ , prePhoneLineEdit_ , otpLineEdit_ , verifyOTPButton_ , errorL , tabWidget ,&uidQString , &keyQString](){
+		QObject::connect(verifyOTPButton_ , &QPushButton::clicked, [this , scrollLayout , scrollWidget  ,phone_ , phoneLineEdit_ , getOTPButton_ , prePhoneLineEdit_ , otpLineEdit_ , verifyOTPButton_ , errorL , tabWidget ,&uidQString , &keyQString](){
 			phone_->setText("Enter OTP");
 			
 			QString fullPhoneNumber_ = prePhoneLineEdit_->text() + phoneLineEdit_->text();
@@ -229,8 +247,9 @@ QString keyQString;
 			Json jsonObject;
 			jsonObject["phoneNumber"] = fullPhoneNumber_.toStdString();
 			jsonObject["otp"] = otpAsNumber;
-			   // Convert JSON object to string
-    			std::string jsonData = jsonObject.dump(2);
+
+			// Convert JSON object to string
+    		std::string jsonData = jsonObject.dump(2);
 
 			CURL *curl;
     		
@@ -238,7 +257,7 @@ QString keyQString;
 			curl = curl_easy_init();
 
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-			curl_easy_setopt(curl, CURLOPT_URL, "https://testapi.streamway.in/v1/otp/obs/verify");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://api.streamway.in/v1/otp/obs/phone/verify");
 			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
 
@@ -262,15 +281,8 @@ QString keyQString;
         			errorMessage.setIcon(QMessageBox::Critical);
         			errorMessage.exec();
     			}else{
-			phone_->setVisible(false);
-			phoneLineEdit_->setVisible(false);
-			prePhoneLineEdit_->setVisible(false);
-			getOTPButton_->setVisible(false);
-			verifyOTPButton_->setVisible(false);
-			otpLineEdit_->setVisible(false);
 					auto j3 = Json::parse(readBuffer);
 
-					
 					if (j3.contains("msg") && j3["msg"].is_object()) {
             			auto msgObj = j3["msg"];
 
@@ -280,7 +292,7 @@ QString keyQString;
 					std::string uid = msgObj["uid"];
                 	std::string key = msgObj["key"];
                 		 auto profiledir = obs_frontend_get_current_profile_path();
-        				if (profiledir) {
+        			if (profiledir) {
             				std::string filename = profiledir;
             				filename += "/obs-multi-rtmp_auth.json";
 
@@ -308,19 +320,12 @@ QString keyQString;
         			}
         			bfree(profiledir);
 					
-					 // Convert uid and key strings to QString
-                uidQString = QString::fromStdString(uid);
-                keyQString = QString::fromStdString(key);
-					// handleTab( layout_ , layout_, uidQString , keyQString);
+					 isAuthenticated();
+					emit authenticationSuccess();
 					
             	}
         }
 
-				// while (tabWidget->count() > 0) {
-            	// 			QWidget* tabToRemove = tabWidget->widget(0); // Get the first 		tab
-            	// 			tabWidget->removeTab(0); // Remove the first tab
-            	// 			delete tabToRemove; // Optionally delete the removed tab widget
-       			// 	}
 					}
 
 	  		curl_easy_cleanup(curl);
@@ -336,101 +341,210 @@ QString keyQString;
 };
 
 
-QWidget* LoginWithEmailWidget(QTabWidget *tabWidget) {
+QWidget* AuthManager::LoginWithEmailWidget(QTabWidget *tabWidget) {
 	 QWidget* loginWithEmailWidget = new QWidget;
     QVBoxLayout* LoginLayout = new QVBoxLayout(loginWithEmailWidget);
+	LoginLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 
-	QLabel* sloganLabel_ = new QLabel("Get More Views By Multistreaming Directly From OBS", loginWithEmailWidget);
-	sloganLabel_->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
-	LoginLayout->addWidget(sloganLabel_);
-	sloganLabel_->setWordWrap(true);
 	QWidget* scrollWidget = new QWidget;
 		// scrollArea->setWidgetResizable(true);
 		
 		// Create a layout for the widget inside the scroll area
 		QVBoxLayout* scrollLayout = new QVBoxLayout(scrollWidget);
+		scrollLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
 		LoginLayout->addWidget(scrollWidget);
 		scrollWidget->setVisible(false);
 
 		// Add a label and text box for entering the uid
-		QLabel* emailLabel_ = new QLabel("Email");
+		QLabel* emailLabel_ = new QLabel("Enter Email");
 		LoginLayout->addWidget(emailLabel_);
 
 		QLineEdit* emailLineEdit_ = new QLineEdit();
 		LoginLayout->addWidget(emailLineEdit_);
-
-        // Add a label and text box for entering the code
-		QLabel* codeLabel_ = new QLabel("API Key");
-		LoginLayout->addWidget(codeLabel_);
-
-		QLineEdit* keyLineEdit_ = new QLineEdit();
-		LoginLayout->addWidget(keyLineEdit_);
-
 	
+		// Add a button for getting OTP
+		QPushButton* getOTPButton_ = new QPushButton("Get OTP");
+		LoginLayout->addWidget(getOTPButton_);
+
+		// OTP input and Verify button
+		QLineEdit* otpLineEdit_ = new QLineEdit();
+		otpLineEdit_->setValidator(new QIntValidator(0, 1000));
+		otpLineEdit_->setPlaceholderText("Enter OTP here");
+		LoginLayout->addWidget(otpLineEdit_);
+		otpLineEdit_->setReadOnly(true);
+
 		// Add a button for verification
 		QPushButton* verifyButton_ = new QPushButton("Verify");
+		verifyButton_->setVisible(false);
 		LoginLayout->addWidget(verifyButton_);
 
-		QLabel* errorL = new QLabel("Invalid Uid or Api Key");
-		errorL->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
-		scrollLayout->addWidget(errorL);
-		errorL->setWordWrap(true);
-		errorL->setStyleSheet("QLabel{font-size: 15px;font-family: Arial;color:red;}"); 
-		errorL->setVisible(false);
+
 
 		
 
-		QObject::connect(verifyButton_, &QPushButton::clicked, [errorL,scrollLayout , scrollWidget , emailLineEdit_ , keyLineEdit_ ,verifyButton_ , codeLabel_  , emailLabel_ ]() {
-			// Get the code entered by the user
-			QString uid = emailLineEdit_->text();
-			QString key = keyLineEdit_->text();
+		QObject::connect(getOTPButton_, &QPushButton::clicked, [scrollLayout , scrollWidget , emailLineEdit_ , getOTPButton_ ,verifyButton_, emailLabel_  , otpLineEdit_]() {
 
-			QString combined = uid + ":" + key;
+			QString email = emailLineEdit_->text();
+			
+			Json jsonObject;
+			jsonObject["email"] = email.toStdString();
+			// Convert JSON object to string
+    		std::string jsonData = jsonObject.dump(2);
+
+			CURL *curl;
+    		
+			curl = curl_easy_init();
+
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://api.streamway.in/v1/otp/obs/email/send");
+			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
+
+			struct curl_slist *headers = NULL;
+			headers = curl_slist_append(headers, "Accept: */*");
+			headers = curl_slist_append(headers, "Content-Type: application/json");
+			curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
+
+			CURLcode ret = curl_easy_perform(curl);
+
+			long response_code;
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+	    		if (response_code != 200) {
+        			curl_easy_cleanup(curl);
+					
+        			QMessageBox errorMessage;
+        			errorMessage.setWindowTitle("Error");
+        			errorMessage.setText("This Email address is Not Registerd On Streamway!");
+        			errorMessage.setIcon(QMessageBox::Critical);
+
+					// Set informative text with a clickable link
+					errorMessage.setInformativeText("<a href='https://app.streamway.in/signup'>SignUp Here</a>");
+
+					// Make the text clickable
+					errorMessage.setTextInteractionFlags(Qt::TextBrowserInteraction);
+
+					// Show the message box and wait for user interaction
+					int result = errorMessage.exec();
+
+					if (result == QMessageBox::Ok) {
+    					// User clicked OK, redirect to the specified URL
+    					QUrl url("https://app.streamway.in/signup");
+    					QDesktopServices::openUrl(url);
+					}
+
+    			}else{
+					emailLineEdit_->setReadOnly(true);
+					verifyButton_->setVisible(true);
+					getOTPButton_->setVisible(false);
+					otpLineEdit_->setVisible(true);
+					otpLineEdit_->setReadOnly(false);
+				}
+
+	  		curl_easy_cleanup(curl);
+			curl = NULL;
+			
 		
+		});
 
-			QByteArray combinedData = combined.toUtf8().toBase64();
-			QString base64AuthHeader = "Basic " + QString(combinedData);
+		QObject::connect(verifyButton_, &QPushButton::clicked, [this , scrollLayout , scrollWidget , emailLineEdit_ , verifyButton_ , emailLabel_ ,otpLineEdit_ ]() {
 
-  std::string url = "https://api.example.com/endpoint";
-  std::string authHeader = "Authorization: Bearer YOUR_API_KEY";
+			emailLabel_->setText("Enter OTP");
+			
+			QString email = emailLineEdit_->text();
+			QString otp = otpLineEdit_->text();
+			bool ok;
+			int otpAsNumber = otp.toInt(&ok);
+			Json jsonObject;
+			jsonObject["email"] = email.toStdString();
+			jsonObject["otp"] = otpAsNumber;
 
-  std::string response;
- 
- 
-  
+			// Convert JSON object to string
+    		std::string jsonData = jsonObject.dump(2);
 
-   // Use a try-catch block to catch any potential exceptions
-    try {
-       // Send the HTTP request
-  if(sendHttpRequest(url, authHeader, response , uid , key)){
-	try{
+			CURL *curl;
+    		
+			std::string readBuffer;
+			curl = curl_easy_init();
 
-				// // Hide the verification UI
-            			 emailLineEdit_->setVisible(false);
-    					 keyLineEdit_->setVisible(false);
-    					 verifyButton_->setVisible(false);
-						 codeLabel_->setVisible(false);
-						 scrollWidget->setVisible(true);
-						 emailLabel_->setVisible(false);
-						 	errorL->setVisible(false);
-					// handleTab( layout_ , scrollLayout, uid , key);
-						
-	}catch (const std::exception& e) {
-        std::cerr << "Exception caught: " << e.what() << std::endl;
-		scrollWidget->setVisible(true);
-       	errorL->setVisible(true);
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+			curl_easy_setopt(curl, CURLOPT_URL, "https://api.streamway.in/v1/otp/obs/email/verify");
+			// curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+			// curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
+
+			struct curl_slist *headers = NULL;
+			headers = curl_slist_append(headers, "Accept: */*");
+			headers = curl_slist_append(headers, "Content-Type: application/json");
+			curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
+			curl_easy_setopt(curl , CURLOPT_WRITEFUNCTION , writeCallback);
+			curl_easy_setopt(curl , CURLOPT_WRITEDATA , &readBuffer);
+
+			CURLcode ret = curl_easy_perform(curl);
+
+			long response_code;
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+	    		if (response_code != 200) {
+        			QMessageBox errorMessage;
+        			errorMessage.setWindowTitle("Error");
+        			errorMessage.setText("Invalid OTP!");
+        			errorMessage.setIcon(QMessageBox::Critical);
+        			errorMessage.exec();
+    			}else{
+					auto j3 = Json::parse(readBuffer);
+
+					if (j3.contains("msg") && j3["msg"].is_object()) {
+            			auto msgObj = j3["msg"];
+
+            		// Read 'uid' and 'key' from the 'msg' object
+            		if (msgObj.contains("uid") && msgObj.contains("key")) {
+                		
+					std::string uid = msgObj["uid"];
+                	std::string key = msgObj["key"];
+                		 auto profiledir = obs_frontend_get_current_profile_path();
+        			if (profiledir) {
+            				std::string filename = profiledir;
+            				filename += "/obs-multi-rtmp_auth.json";
+
+           				 // Read existing JSON content from the file
+            				std::ifstream inFile(filename);
+            				nlohmann::json configJson;
+
+            				if (inFile.is_open()) {
+                				inFile >> configJson;
+                				inFile.close();
+           					 } 
+
+            			// Update uid and key in the existing JSON object
+            			configJson["uid_key"]["uid"] = uid;
+            			configJson["uid_key"]["key"] =  key;
+			 
+
+           				 // Convert the updated JSON to a string
+            			std::string content = configJson.dump();
+
+			
+
+           				 // Write the updated content back to the file
+           				os_quick_write_utf8_file_safe(filename.c_str(), content.c_str(), content.size(), true, "tmp", "bak");
+        			}
+        			bfree(profiledir);
+					
+					 isAuthenticated();
+					emit authenticationSuccess();
+					
+            	}
+        }
+
+					}
+
+	  		curl_easy_cleanup(curl);
+			curl = NULL;
+
+			
 		
-	}
-						
-  }else{
-	scrollWidget->setVisible(true);
-	errorL->setVisible(true);
-  }
-    } catch (const std::exception& e) {
-        std::cerr << "Exception caught: " << e.what() << std::endl;
-		scrollWidget->setVisible(true);
-        errorL->setVisible(true);
-    }			
 		});
 
     return loginWithEmailWidget;
@@ -441,10 +555,7 @@ QWidget* AuthManager::LoginWithAPIKeyWidget(QTabWidget *tabWidget) {
 	 QWidget* loginWithAPIKeyWidget = new QWidget;
     QVBoxLayout* LoginLayout = new QVBoxLayout(loginWithAPIKeyWidget);
 	LoginLayout->setAlignment(Qt::AlignmentFlag::AlignTop); 
-	QLabel* sloganLabel_ = new QLabel("Get More Views By Multistreaming Directly From OBS", loginWithAPIKeyWidget);
-	sloganLabel_->setStyleSheet("QLabel{font-size: 14px;font-family: Arial;}");
-	LoginLayout->addWidget(sloganLabel_);
-	sloganLabel_->setWordWrap(true);
+	
 	QWidget* scrollWidget = new QWidget;
 		// scrollArea->setWidgetResizable(true);
 		
@@ -493,16 +604,13 @@ LoginLayout->addLayout(keyLayout);
 			QByteArray combinedData = combined.toUtf8().toBase64();
 			QString base64AuthHeader = "Basic " + QString(combinedData);
 
-  std::string url = "https://api.example.com/endpoint";
-  std::string authHeader = "Authorization: Bearer YOUR_API_KEY";
 
-  std::string response;
  
 
    // Use a try-catch block to catch any potential exceptions
     try {
        // Send the HTTP request
-  if(sendHttpRequest(url, authHeader, response , uid , key)){
+  if(sendHttpRequest(uid , key)){
 	try{
 
 	 auto profiledir = obs_frontend_get_current_profile_path();
@@ -559,7 +667,7 @@ LoginLayout->addLayout(keyLayout);
 
 
 	auto label = new QLabel(
-				u8"<p>Get Your <a href=\"https://app.streamway.in/setting\">Uid and Api Key</a></p>");
+				u8"<p>Get Your <a href=\"https://app.streamway.in/account/obs\">Uid and Api Key</a></p>");
 			label->setTextFormat(Qt::RichText);
 			label->setTextInteractionFlags(
 				Qt::TextBrowserInteraction);
@@ -570,20 +678,38 @@ LoginLayout->addLayout(keyLayout);
 }
 
 
-// Function to handle Authentation Tabs
+// Function to handle Authentication Tabs
 QWidget* AuthManager::handleAuthTab() {
-	// Create a QTabWidget to hold the tabs
-	QTabWidget* tabWidget = new QTabWidget;
 
-	// Call the functions to create tabs and add them to the QTabWidget
-  // Create widgets for each tab content
+    // Create a container widget to hold the login label and tab widget
+    QWidget* containerWidget = new QWidget;
+
+    // Create a layout for the container widget
+    QVBoxLayout* containerLayout = new QVBoxLayout(containerWidget);
+	containerLayout->setContentsMargins(0, 0, 0, 0); // Set margins to 0 to reduce extra space
+
+
+    // Show authentication screen if not authenticated
+    QLabel* loginLabel_ = new QLabel("LOGIN WITH", containerWidget);
+    loginLabel_->setAlignment(Qt::AlignCenter); // Align the text to the center
+    containerLayout->addWidget(loginLabel_, 0, Qt::AlignCenter); // Add the label with center alignment
+
+    // Create a QTabWidget to hold the tabs
+    QTabWidget* tabWidget = new QTabWidget(containerWidget);
+
+    // Create widgets for each tab content
     QWidget* phoneWidget = LoginWithPhoneWidget(tabWidget);
     QWidget* emailWidget = LoginWithEmailWidget(tabWidget);
     QWidget* apiKeyWidget = LoginWithAPIKeyWidget(tabWidget);
 
     // Add tabs to the QTabWidget
-    // tabWidget->addTab(phoneWidget, "Phone");
-    // tabWidget->addTab(emailWidget, "Email");
+    tabWidget->addTab(phoneWidget, "Phone");
+    tabWidget->addTab(emailWidget, "Email");
     tabWidget->addTab(apiKeyWidget, "API Key");
-	return tabWidget;
-};
+
+    // Add the tab widget to the container layout
+    containerLayout->addWidget(tabWidget);
+
+    return containerWidget;
+}
+

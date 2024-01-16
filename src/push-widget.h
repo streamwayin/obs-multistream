@@ -1,6 +1,7 @@
 #include "pch.h"
 
 class PushWidget : virtual public QWidget {
+
 public:
     virtual ~PushWidget() {}
     virtual bool ShowEditDlg() = 0;
