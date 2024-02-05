@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <vector>
 #include "push-widget.h"
-
+#include "QFrame"
 #include "output-config.h"
 #include "Dashboard.h"
 using Json = nlohmann::json;
@@ -132,9 +132,44 @@ void getCurrentBroadcast()
 	}
 };
 
-// bool isBroadcastIsLive(){
-// 	...coming soon
-// }
+bool isServerBaseEnabled() {
+    auto profiledir = obs_frontend_get_current_profile_path();
+
+    try {
+        if (profiledir) {
+            std::string filename = profiledir;
+            filename += "/obs-multi-rtmp_auth.json";
+
+            // Read existing JSON content from the file
+            std::ifstream inFile(filename);
+            nlohmann::json configJson;
+
+            if (inFile.is_open()) {
+                inFile >> configJson;
+                inFile.close();
+
+                // Check if "serverBase" key exists in the JSON object
+                if (configJson.contains("serverBase")) {
+                    // Return the boolean value of "serverBase"
+                    return configJson["serverBase"].get<bool>();
+                } else {
+                    // If "serverBase" key is not present, return false (or handle accordingly)
+                    return false;
+                }
+            } else {
+                // If the file cannot be opened, return false (or handle accordingly)
+                return false;
+            }
+        }
+    } catch (const std::exception& e) {
+        // Handle any exceptions that may occur during JSON parsing
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    // If any errors occurred, return false
+    return false;
+}
+
 
 void Dashboard::SaveConfig()
 {
@@ -185,6 +220,241 @@ static size_t writeCallback(void *ptr, size_t size, size_t nmemb, void *stream)
 	data->append((char *)ptr, size * nmemb);
 	return size * nmemb;
 };
+
+QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, QTabWidget* tabWidget , std::string id , bool isLive)
+{
+    // emit refreshBroadcasts();
+    getCurrentBroadcast();
+    QWidget* parent = new QWidget;
+
+    QVBoxLayout* parentLayout = new QVBoxLayout(parent);
+	parentLayout->setAlignment(Qt::AlignmentFlag::AlignTop);
+    // Create buttons
+    QPushButton* startButton = new QPushButton("Start", parent);
+    QPushButton* stopButton = new QPushButton("Stop", parent);
+    QPushButton* endBroadcastButton = new QPushButton("End", parent);
+	 QPushButton* selectButton = new QPushButton("Select", parent);
+	startButton->setVisible(false);
+			endBroadcastButton->setVisible(false);
+			stopButton->setVisible(false);
+
+    // Initially, show only the start button
+	if(isLive){
+		if(currentBroadcast["id"]==id){
+			startButton->setEnabled(false);
+			endBroadcastButton->setEnabled(true);
+			stopButton->setEnabled(true);
+		}else{
+			startButton->setEnabled(false);
+			endBroadcastButton->setEnabled(false);
+			stopButton->setEnabled(false);
+		}
+		
+	}
+    
+
+    // Create a horizontal layout for start/stop buttons
+    QHBoxLayout* startStopLayout = new QHBoxLayout;
+    // startStopLayout->addWidget(startButton);
+    // startStopLayout->addWidget(stopButton);
+    // startStopLayout->addWidget(endBroadcastButton);
+	startStopLayout->addWidget(selectButton);
+    // Add buttons and layouts to the parent layout
+    parentLayout->addLayout(startStopLayout);
+	parentLayout->setContentsMargins(0, 0, 0, 0);
+
+
+	QObject::connect(selectButton, &QPushButton::clicked, [this , startButton, stopButton, endBroadcastButton , id , selectButton , tabWidget]() {
+				currentBroadcastId = id;
+					if (currentBroadcastId.front() == '"' &&
+					    currentBroadcastId.back() == '"') {
+						currentBroadcastId =
+							currentBroadcastId.substr(
+								1,
+								currentBroadcastId
+										.size() -
+									2);
+					}
+
+					auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+						// Create an object for the current broadcast with id and status
+						nlohmann::json
+							currentBroadcastObj;
+						currentBroadcastObj["id"] =
+							currentBroadcastId;
+						currentBroadcastObj["status"] =
+							"live";
+
+						// Update uid and key in the existing JSON object
+						configJson["current_broadcast"] =
+							currentBroadcastObj;
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
+
+					auto &global =
+						GlobalMultiOutputConfig();
+
+					global.targets.clear();
+					SaveMultiOutputConfig();
+					LoadConfig();
+					
+
+					
+					//  QJsonObject firstDestination = destinationsArray[0].toObject();
+					obs_service_t *service =
+						obs_frontend_get_streaming_service();
+					obs_data_t *settings =
+						obs_service_get_settings(
+							service);
+					// cout << obs_data_get_json_pretty(settings) << endl;
+					std::string url = "rtmp://injest.streamway.in/LiveApp";
+
+					
+					obs_data_set_string(
+						settings, "key",
+						id.c_str());
+					// obs_data_set_string(
+					// 	settings, "service",
+					// 	"Custom...");	
+					obs_data_set_string(
+						settings, "server",
+						url.c_str());
+					obs_data_set_string(
+						settings, "server",
+						url.c_str());	
+					obs_data_release(settings);
+					obs_service_update(service,settings);
+			
+		tabWidget->setCurrentIndex(1);
+        
+    });
+	
+    // Connect button signals to slots
+    QObject::connect(startButton, &QPushButton::clicked, [this , startButton, stopButton, endBroadcastButton ,id]() {
+        // When Start button is clicked, hide Start and show Stop and End Broadcast
+        startButton->setEnabled(false);
+        stopButton->setEnabled(true);
+        endBroadcastButton->setEnabled(true);
+
+
+
+		obs_frontend_streaming_start();
+        emit refreshBroadcasts();
+    });
+
+    QObject::connect(stopButton, &QPushButton::clicked, [startButton, stopButton, endBroadcastButton]() {
+        // When Stop button is clicked, hide Stop and show Start, hide End Broadcast
+		stopButton->setEnabled(false);
+		startButton->setEnabled(true);
+        
+		obs_frontend_streaming_stop();
+        // Add your logic for stopping the streaming here
+    });
+
+    QObject::connect(endBroadcastButton, &QPushButton::clicked, [this , startButton, stopButton, endBroadcastButton , uid , key]() {
+        // Add your logic for ending the broadcast here
+		try {
+				obs_frontend_streaming_stop();
+
+				CURL *curl;
+				curl = curl_easy_init();
+
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST,
+						 "POST");
+				std::string url =
+					"https://api.streamway.in/v1/broadcasts/" +
+					currentBroadcastId;
+			
+				curl_easy_setopt(curl, CURLOPT_URL,
+						 url.c_str());
+				// Set authentication
+				curl_easy_setopt(curl, CURLOPT_HTTPAUTH,
+						 CURLAUTH_BASIC);
+				curl_easy_setopt(curl, CURLOPT_USERNAME,
+						 uid.toStdString().c_str());
+				curl_easy_setopt(curl, CURLOPT_PASSWORD,
+						 key.toStdString().c_str());
+
+				struct curl_slist *headers = NULL;
+				headers = curl_slist_append(headers,
+							    "Accept: */*");
+				headers = curl_slist_append(
+					headers,
+					"Content-Type: application/json");
+
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER,
+						 headers);
+
+				CURLcode ret = curl_easy_perform(curl);
+				long response_code;
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE,
+						  &response_code);
+				// Check for errors
+				if (response_code != 200) {
+					curl_easy_cleanup(curl);
+					// return false;
+				}
+
+				// Cleanup
+				curl_easy_cleanup(curl);
+				curl = NULL;
+
+				
+
+				auto &global = GlobalMultiOutputConfig();
+
+				global.targets.clear();
+				SaveMultiOutputConfig();
+				LoadConfig();
+				removeCurrentBroadcastField();
+				currentBroadcast["status"] = "ready";
+				startButton->setEnabled(true);
+				endBroadcastButton->setEnabled(true);
+				stopButton->setEnabled(true); 
+				emit refreshBroadcasts();
+
+			} catch (const std::exception &e) {
+				// Handle the exception
+				// Log or display an error message
+				obs_log(LOG_INFO, "i am a error %s", e.what());
+				qDebug() << "Exception occurred: " << e.what();
+			} catch (...) {
+				// Catch any other unexpected exceptions
+				qDebug() << "Unknown exception occurred";
+			}
+    });
+
+    return parent;
+}
+
 
 void Dashboard::handleSuccessfulLogin(const QString &uid, const QString &key,
 				      QVBoxLayout *newUiLayout,
@@ -364,18 +634,9 @@ try{
 				QPushButton *SelectButton =
 					new QPushButton("Select");
 
-				// if (currentBroadcast["status"] == "live") {
-				// 	// Disable the button if the broadcast status is live
-				// 	SelectButton->setEnabled(false);
-				// 	SelectButton->setToolTip(
-				// 		"Another broadcast is already live Please stop it First in Go Live Tab.");
-				// } else {
-				// 	SelectButton->setEnabled(true);
-				// 	SelectButton->setToolTip(
-				// 		"Select broadcast");
-				// }
 
 				QObject::connect(SelectButton, &QPushButton::clicked, [this, jsonObject, tabWidget]() {
+
 					currentBroadcastId =
 						jsonObject["id"].dump();
 					if (currentBroadcastId.front() == '"' &&
@@ -469,17 +730,13 @@ try{
 					obs_data_set_string(
 						settings, "key",
 						key.toStdString().c_str());
-					// obs_data_set_string(
-					// 	settings, "service",
-					// 	"Custom...");	
+					
 					obs_data_set_string(
 						settings, "server",
 						url.toStdString().c_str());
-					obs_data_set_string(
-						settings, "server",
-						url.toStdString().c_str());	
+					
 					obs_data_release(settings);
-
+					obs_service_update(service,settings);
 					if (destinationsArray.size() != 1) {
 						for (size_t i = 1;
 						     i <
@@ -550,7 +807,20 @@ try{
 					tabWidget->setCurrentIndex(1);
 				});
 
-				titleScheduledLayout->addWidget(SelectButton);
+				if(isServerBaseEnabled()){
+					QWidget* serverBaseStreamingWidget;
+
+					// Create and add the serverBaseStreaming widget
+					if(currentBroadcast["status"]=="live"){
+						serverBaseStreamingWidget = serverBaseStreaming(uid, key, tabWidget , jsonObject["id"] , true);
+					}else{
+						serverBaseStreamingWidget = serverBaseStreaming(uid, key, tabWidget , jsonObject["id"] , false);
+					}
+					
+					titleScheduledLayout->addWidget(serverBaseStreamingWidget);
+				}else{
+					titleScheduledLayout->addWidget(SelectButton);
+				}
 
 				// Add the title and scheduledTime group to the item layout
 				itemLayout->addWidget(titleScheduledGroup);
@@ -574,9 +844,6 @@ try{
 }catch(const std::exception& e){
             obs_log(LOG_INFO , "i am a error %s", e.what());
         }
-
-	
-
 }
 
 // Function to create Tab 1 and its content
@@ -767,11 +1034,118 @@ QWidget *Dashboard::createTab3()
 
 	QVBoxLayout *tab3Layout = new QVBoxLayout(tab3);
 	tab3Layout->setAlignment(Qt::AlignmentFlag::AlignTop);
+		  // Radio Input
+    QRadioButton *radioButton = new QRadioButton("Server Base Streaming", tab3);
+	// Set top margin (adjust the value as needed)
+	QMargins margins = radioButton->contentsMargins();
+	margins.setTop(10);  // Set the top margin to 10 pixels (adjust as needed)
+	radioButton->setContentsMargins(margins);
+
+	if(isServerBaseEnabled()){
+		radioButton->setChecked(true);
+	}else{
+		radioButton->setChecked(false);
+	}
+	
+    tab3Layout->addWidget(radioButton);
+
+    // Save Button
+    QPushButton *saveButton = new QPushButton("Save", tab3);
+    tab3Layout->addWidget(saveButton);
+    QObject::connect(saveButton, &QPushButton::clicked, [this, radioButton]() {
+        // Handle save button click
+        if (radioButton->isChecked()) {
+            auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+					
+						// Update uid and key in the existing JSON object
+						configJson["serverBase"] =
+							true;
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
+        }else{
+			auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+						configJson["serverBase"] =
+							false;
+						
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
+		}
+    
+		emit refreshBroadcasts();
+	});
+
 	auto logOutButton = new QPushButton("LogOut", tab3);
 	tab3Layout->addWidget(logOutButton);
 	QObject::connect(logOutButton, &QPushButton::clicked, [this]() {
 		emit logOutDashboard();
 	});
+
+	QString right = "This plugin is developed and maintained by streamway.in";
+QLabel *rightLabel = new QLabel(right);
+
+// Set top margin for the rightLabel
+QMargins labelMargins = rightLabel->contentsMargins();
+labelMargins.setTop(10);  // Set the top margin to 10 pixels (adjust as needed)
+rightLabel->setContentsMargins(labelMargins);
+
+tab3Layout->addWidget(rightLabel);
+
 
 	QString quote =
 		"Credit -> obs-multi-rtmp plugin by sorayuki\n"
@@ -785,6 +1159,9 @@ QWidget *Dashboard::createTab3()
 
 	// Add the quote label to the layout or widget where you want to display it
 	tab3Layout->addWidget(quoteLabel);
+
+
+
 	return tab3;
 };
 
@@ -795,8 +1172,6 @@ QWidget *Dashboard::handleTab()
 	if (!authmanager.isAuthenticated()) {
 		emit logOutDashboard();
 	}
-
-    
 
 	getCurrentBroadcast();
 
@@ -814,7 +1189,7 @@ QWidget *Dashboard::handleTab()
 	// Set fixed sizes for tabs
 	// tab1->setFixedSize(200, 50); // Set width and height for tab1
 	// tab2->setMinimumSize(100, 200); // Set minimum width and height for tab2
-	tab3->setMaximumSize(250, 270); // Set maximum width and height for tab3
+	tab3->setMaximumSize(250, 350); // Set maximum width and height for tab3
 
 	// Set background color for each tab
 	// container_->setStyleSheet("background-color: lightblue;"); // Change color as needed

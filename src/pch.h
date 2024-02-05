@@ -59,6 +59,7 @@
 #include "AuthManager.h"
 #include "thread"
 #include "future"
+#include <QRadioButton>
 #define TAG "[obs-multi-rtmp] "
 
 

@@ -732,6 +732,7 @@ void startStreamingListner() {
                 StartStop();
                 startStreamingListner();
             }
+            
         } else if (ev == obs_frontend_event::OBS_FRONTEND_EVENT_STREAMING_STOPPING) {
             if (IsRunning() && config_->syncStart) {
                 StartStop();
