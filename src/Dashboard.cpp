@@ -1035,7 +1035,7 @@ QWidget *Dashboard::createTab3()
 	QVBoxLayout *tab3Layout = new QVBoxLayout(tab3);
 	tab3Layout->setAlignment(Qt::AlignmentFlag::AlignTop);
 		  // Radio Input
-    QRadioButton *radioButton = new QRadioButton("Server Base Streaming", tab3);
+    QCheckBox *radioButton = new QCheckBox("Server Base Streaming", tab3);
 	// Set top margin (adjust the value as needed)
 	QMargins margins = radioButton->contentsMargins();
 	margins.setTop(10);  // Set the top margin to 10 pixels (adjust as needed)
@@ -1143,7 +1143,7 @@ QLabel *rightLabel = new QLabel(right);
 QMargins labelMargins = rightLabel->contentsMargins();
 labelMargins.setTop(10);  // Set the top margin to 10 pixels (adjust as needed)
 rightLabel->setContentsMargins(labelMargins);
-
+rightLabel->setWordWrap(true);
 tab3Layout->addWidget(rightLabel);
 
 

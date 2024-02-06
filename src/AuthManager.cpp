@@ -335,7 +335,12 @@ QString keyQString;
 
 		});
 
-		
+	 auto SLabel = new QLabel(u8"<p>Need Accound ? <a href=\"https://app.streamway.in/signup/\">Signup Now Free</a></p>");
+        SLabel->setTextFormat(Qt::RichText);
+        SLabel->setWordWrap(true);
+        SLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        SLabel->setOpenExternalLinks(true);
+        LoginLayout->addWidget(SLabel);	
 
     return loginWithPhoneWidget;
 };
@@ -547,6 +552,15 @@ QWidget* AuthManager::LoginWithEmailWidget(QTabWidget *tabWidget) {
 		
 		});
 
+
+
+		 auto SLabel = new QLabel(u8"<p>Need Accound ? <a href=\"https://app.streamway.in/signup/\">Signup Now Free</a></p>");
+        SLabel->setTextFormat(Qt::RichText);
+        SLabel->setWordWrap(true);
+        SLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        SLabel->setOpenExternalLinks(true);
+        LoginLayout->addWidget(SLabel);
+
     return loginWithEmailWidget;
 }
 
@@ -664,7 +678,12 @@ LoginLayout->addLayout(keyLayout);
     }			
 		});
 
-
+ auto SLabel = new QLabel(u8"<p>Need Accound ? <a href=\"https://app.streamway.in/signup/\">Signup Now Free</a></p>");
+        SLabel->setTextFormat(Qt::RichText);
+        SLabel->setWordWrap(true);
+        SLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        SLabel->setOpenExternalLinks(true);
+        LoginLayout->addWidget(SLabel);
 
 	auto label = new QLabel(
 				u8"<p>Get Your <a href=\"https://app.streamway.in/account/obs\">Uid and Api Key</a></p>");

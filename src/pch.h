@@ -33,6 +33,7 @@
 #include <QRadioButton>
 #include <QScrollArea>
 #include <QPixmap>
+#include <QCheckBox>
 #include <QImage>
 #include <QDesktopServices>
 #include <QTabWidget>
