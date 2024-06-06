@@ -722,7 +722,7 @@ QWidget* AuthManager::handleAuthTab() {
     QWidget* apiKeyWidget = LoginWithAPIKeyWidget(tabWidget);
 
     // Add tabs to the QTabWidget
-    tabWidget->addTab(phoneWidget, "Phone");
+    // tabWidget->addTab(phoneWidget, "Phone");
     tabWidget->addTab(emailWidget, "Email");
     tabWidget->addTab(apiKeyWidget, "API Key");
 

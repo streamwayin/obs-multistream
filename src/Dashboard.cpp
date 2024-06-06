@@ -705,11 +705,7 @@ try{
 					auto firstDestination =
 						destinationsArray.at(0);
 					//  QJsonObject firstDestination = destinationsArray[0].toObject();
-					obs_service_t *service =
-						obs_frontend_get_streaming_service();
-					obs_data_t *settings =
-						obs_service_get_settings(
-							service);
+					
 					// cout << obs_data_get_json_pretty(settings) << endl;
 					QString url =
 						firstDestination["url"]
@@ -723,20 +719,34 @@ try{
 							1); // Remove the last character (which is '/')
 					}
 
+					obs_service_t *service =
+						obs_frontend_get_streaming_service();
+					obs_data_t *settings =
+						obs_service_get_settings(
+							service);
+
 					QString key =
 						firstDestination["key"]
 							.get<std::string>()
 							.c_str();
 					obs_data_set_string(
+						settings, "service",
+						"Custom...");
+
+					obs_data_set_string(
 						settings, "key",
 						key.toStdString().c_str());
-					
 					obs_data_set_string(
 						settings, "server",
 						url.toStdString().c_str());
+					obs_data_set_string(
+						settings, "server",
+						url.toStdString().c_str());
+					// The server setting is intentionally not set as per instructions
 					
 					obs_data_release(settings);
-					obs_service_update(service,settings);
+					obs_service_apply_encoder_settings(service, settings, nullptr);
+
 					if (destinationsArray.size() != 1) {
 						for (size_t i = 1;
 						     i <
@@ -1213,3 +1223,5 @@ QWidget *Dashboard::handleTab()
 // void Dashboard::disableTab() {
 //    tabWidget->setTabEnabled(0 , false);
 // };
+
+
