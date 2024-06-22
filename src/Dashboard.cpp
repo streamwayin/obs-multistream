@@ -170,6 +170,43 @@ bool isServerBaseEnabled() {
     return false;
 }
 
+bool isFirstDestinationEnabled() {
+    auto profiledir = obs_frontend_get_current_profile_path();
+
+    try {
+        if (profiledir) {
+            std::string filename = profiledir;
+            filename += "/obs-multi-rtmp_auth.json";
+
+            // Read existing JSON content from the file
+            std::ifstream inFile(filename);
+            nlohmann::json configJson;
+
+            if (inFile.is_open()) {
+                inFile >> configJson;
+                inFile.close();
+
+                // Check if "serverBase" key exists in the JSON object
+                if (configJson.contains("firstDestination")) {
+                    // Return the boolean value of "serverBase"
+                    return configJson["firstDestination"].get<bool>();
+                } else {
+                    // If "serverBase" key is not present, return false (or handle accordingly)
+                    return false;
+                }
+            } else {
+                // If the file cannot be opened, return false (or handle accordingly)
+                return false;
+            }
+        }
+    } catch (const std::exception& e) {
+        // Handle any exceptions that may occur during JSON parsing
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    // If any errors occurred, return false
+    return false;
+}
 
 void Dashboard::SaveConfig()
 {
@@ -255,9 +292,9 @@ QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, 
 
     // Create a horizontal layout for start/stop buttons
     QHBoxLayout* startStopLayout = new QHBoxLayout;
-    // startStopLayout->addWidget(startButton);
-    // startStopLayout->addWidget(stopButton);
-    // startStopLayout->addWidget(endBroadcastButton);
+    startStopLayout->addWidget(startButton);
+    startStopLayout->addWidget(stopButton);
+    startStopLayout->addWidget(endBroadcastButton);
 	startStopLayout->addWidget(selectButton);
     // Add buttons and layouts to the parent layout
     parentLayout->addLayout(startStopLayout);
@@ -300,7 +337,7 @@ QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, 
 						currentBroadcastObj["id"] =
 							currentBroadcastId;
 						currentBroadcastObj["status"] =
-							"live";
+							"ready";
 
 						// Update uid and key in the existing JSON object
 						configJson["current_broadcast"] =
@@ -347,13 +384,14 @@ QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, 
 					obs_data_set_string(
 						settings, "server",
 						url.c_str());
-					obs_data_set_string(
-						settings, "server",
-						url.c_str());	
+						
 					obs_data_release(settings);
 					obs_service_update(service,settings);
-			
-		tabWidget->setCurrentIndex(1);
+					startButton->setVisible(true);
+			endBroadcastButton->setVisible(true);
+			stopButton->setVisible(true);
+			selectButton->setVisible(false);
+		// tabWidget->setCurrentIndex(1);
         
     });
 	
@@ -363,10 +401,49 @@ QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, 
         startButton->setEnabled(false);
         stopButton->setEnabled(true);
         endBroadcastButton->setEnabled(true);
-
-
-
 		obs_frontend_streaming_start();
+							auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+						// Create an object for the current broadcast with id and status
+						nlohmann::json
+							currentBroadcastObj;
+						currentBroadcastObj["id"] =
+							currentBroadcastId;
+						currentBroadcastObj["status"] =
+							"live";
+
+						// Update uid and key in the existing JSON object
+						configJson["current_broadcast"] =
+							currentBroadcastObj;
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
         emit refreshBroadcasts();
     });
 
@@ -382,6 +459,9 @@ QWidget *Dashboard::serverBaseStreaming(const QString& uid, const QString& key, 
     QObject::connect(endBroadcastButton, &QPushButton::clicked, [this , startButton, stopButton, endBroadcastButton , uid , key]() {
         // Add your logic for ending the broadcast here
 		try {
+				startButton->setEnabled(false);
+				endBroadcastButton->setEnabled(false);
+				stopButton->setEnabled(false);
 				obs_frontend_streaming_stop();
 
 				CURL *curl;
@@ -719,7 +799,8 @@ try{
 							1); // Remove the last character (which is '/')
 					}
 
-					obs_service_t *service =
+					if(isFirstDestinationEnabled()){
+						obs_service_t *service =
 						obs_frontend_get_streaming_service();
 					obs_data_t *settings =
 						obs_service_get_settings(
@@ -729,9 +810,6 @@ try{
 						firstDestination["key"]
 							.get<std::string>()
 							.c_str();
-					obs_data_set_string(
-						settings, "service",
-						"Custom...");
 
 					obs_data_set_string(
 						settings, "key",
@@ -739,15 +817,82 @@ try{
 					obs_data_set_string(
 						settings, "server",
 						url.toStdString().c_str());
-					obs_data_set_string(
-						settings, "server",
-						url.toStdString().c_str());
 					// The server setting is intentionally not set as per instructions
 					
 					obs_data_release(settings);
 					obs_service_apply_encoder_settings(service, settings, nullptr);
+					}
+					
+					if(isFirstDestinationEnabled()){
+						if (destinationsArray.size() != 0) {
+						for (size_t i = 0;
+						     i <
+						     destinationsArray.size();
+						     ++i) {
+							auto destination =
+								destinationsArray
+									.at(i);
 
-					if (destinationsArray.size() != 1) {
+							QString platformUserName =
+								destination["platformUserName"]
+									.get<std::string>()
+									.c_str();
+							QString platformTitle =
+								destination["platformTitle"]
+									.get<std::string>()
+									.c_str();
+							QString title =
+								platformUserName +
+								" - " +
+								platformTitle;
+
+							auto newid = GenerateId(
+								global);
+							auto target = std::make_shared<
+								OutputTargetConfig>();
+							target->id = newid;
+							target->name =
+								title.toStdString();
+							target->serviceParam = {
+								{"server",
+								 destination["url"]
+									 .get<std::string>()},
+								{"key",
+								 destination["key"]
+									 .get<std::string>()},
+								{"use_auth",
+								 false}};
+							target->outputParam = {
+								{"bind_ip",
+								 "default"},
+								{"drop_threshold_ms",
+								 700},
+								{"low_latency_mode_enabled",
+								 false},
+								{"max_shutdown_time_sec",
+								 30},
+								{"new_socket_loop_enabled",
+								 false},
+								{"pframe_drop_threshold_ms",
+								 900}};
+							target->syncStart =
+								true;
+							global.targets
+								.emplace_back(
+									target);
+
+							auto pushwidget =
+								createPushWidget(
+									newid,
+									container_);
+							itemLayout_->addWidget(
+								pushwidget);
+							SaveConfig();
+						}
+					}
+
+					}else{
+						if (destinationsArray.size() != 1) {
 						for (size_t i = 1;
 						     i <
 						     destinationsArray.size();
@@ -814,12 +959,15 @@ try{
 						}
 					}
 
+					}
+
+					
 					tabWidget->setCurrentIndex(1);
 				});
 
 				if(isServerBaseEnabled()){
 					QWidget* serverBaseStreamingWidget;
-
+					tabWidget->setTabEnabled(1 , false);
 					// Create and add the serverBaseStreaming widget
 					if(currentBroadcast["status"]=="live"){
 						serverBaseStreamingWidget = serverBaseStreaming(uid, key, tabWidget , jsonObject["id"] , true);
@@ -1044,7 +1192,7 @@ QWidget *Dashboard::createTab3()
 
 	QVBoxLayout *tab3Layout = new QVBoxLayout(tab3);
 	tab3Layout->setAlignment(Qt::AlignmentFlag::AlignTop);
-		  // Radio Input
+	// Radio Input
     QCheckBox *radioButton = new QCheckBox("Server Base Streaming", tab3);
 	// Set top margin (adjust the value as needed)
 	QMargins margins = radioButton->contentsMargins();
@@ -1120,6 +1268,100 @@ QWidget *Dashboard::createTab3()
 						}
 
 						configJson["serverBase"] =
+							false;
+						
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
+		}
+    
+		emit refreshBroadcasts();
+	});
+
+		// Use OBS Master output
+    QCheckBox *firstDestButton = new QCheckBox("Use OBS Master output", tab3);
+
+	firstDestButton->setContentsMargins(margins);
+
+	if(isFirstDestinationEnabled()){
+		firstDestButton->setChecked(true);
+	}else{
+		firstDestButton->setChecked(false);
+	}
+	
+    tab3Layout->addWidget(firstDestButton);
+
+    // Save Button
+    QPushButton *saveFirstDestButton = new QPushButton("Save", tab3);
+    tab3Layout->addWidget(saveFirstDestButton);
+    QObject::connect(saveFirstDestButton, &QPushButton::clicked, [this, firstDestButton]() {
+        // Handle save button click
+        if (firstDestButton->isChecked()) {
+            auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+					
+						// Update uid and key in the existing JSON object
+						configJson["firstDestination"] =
+							true;
+
+						// Convert the updated JSON to a string
+						std::string content =
+							configJson.dump();
+
+						// Write the updated content back to the file
+						os_quick_write_utf8_file_safe(
+							filename.c_str(),
+							content.c_str(),
+							content.size(), true,
+							"tmp", "bak");
+					}
+					bfree(profiledir);
+        }else{
+			auto profiledir =
+						obs_frontend_get_current_profile_path();
+
+					if (profiledir) {
+						std::string filename =
+							profiledir;
+						filename +=
+							"/obs-multi-rtmp_auth.json";
+
+						// Read existing JSON content from the file
+						std::ifstream inFile(filename);
+						nlohmann::json configJson;
+
+						if (inFile.is_open()) {
+							inFile >> configJson;
+							inFile.close();
+						}
+
+						configJson["firstDestination"] =
 							false;
 						
 
